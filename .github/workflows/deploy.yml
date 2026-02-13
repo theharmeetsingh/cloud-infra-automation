@@ -1,0 +1,35 @@
+name: Deploy Website to S3 and CloudFront
+
+on:
+  push:
+    branches:
+      - main  # This triggers the deploy whenever you push code to the main branch
+
+permissions:
+  id-token: write # Required for OIDC authentication
+  contents: read  # Required to checkout your code
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Sync Files to S3
+        run: |
+          # This copies your files to S3 and deletes files in S3 that are no longer in GitHub
+          aws s3 sync . s3://${{ secrets.S3_BUCKET_NAME }} --delete --exclude ".git/*" --exclude ".github/*"
+
+      - name: Invalidate CloudFront Cache
+        run: |
+          # This clears the CloudFront cache so changes show up immediately
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
+            --paths "/*"
